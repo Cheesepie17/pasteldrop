@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PastelDrop &bull; Minimalist P2P AirDrop</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="PastelDrop">
+  <meta name="theme-color" content="#e0f2fe">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Mali:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f7fafc;
+      color: #334155;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    .font-cute {
+      font-family: 'Mali', 'Prompt', cursive;
+    }
+    
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .pastel-card {
+      background: #ffffff;
+      border: 1.5px solid #eef2f6;
+      box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.08);
+      border-radius: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .drop-active {
+      border-color: #38bdf8 !important;
+      background-color: #f0f9ff !important;
+      transform: scale(1.01);
+    }
+  </style>
+</head>
+<body class="min-h-screen p-3 md:p-6 flex flex-col justify-between">
+
+  <div class="max-w-4xl mx-auto w-full space-y-5">
+
+    <!-- Top Navigation / Brand Header -->
+    <header class="pastel-card p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-100 via-teal-100 to-emerald-100 p-1 flex items-center justify-center shadow-sm">
+          <img src="/icon.png" alt="PastelDrop" class="w-10 h-10 rounded-xl object-contain">
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-800 font-cute">
+              PastelDrop
+            </h1>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-mono font-medium">P2P AirDrop</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5" id="txtMyDeviceName">
+            กำลังตรวจจับอุปกรณ์...
+          </p>
+        </div>
+      </div>
+
+      <!-- Room Code Badge & Actions -->
+      <div class="flex items-center gap-2 bg-slate-50 border border-slate-200/80 p-2 rounded-2xl">
+        <div class="px-2">
+          <span class="text-[10px] text-slate-400 block uppercase tracking-wider font-semibold">รหัสห้อง (Room Code)</span>
+          <span id="txtRoomCode" class="text-base font-bold mono text-sky-700 tracking-wider">------</span>
+        </div>
+        <button id="btnCopyLink" title="คัดลอกลิงก์ห้อง" class="w-9 h-9 rounded-xl bg-white hover:bg-sky-50 border border-slate-200 text-slate-600 hover:text-sky-600 flex items-center justify-center text-xs transition">
+          <i class="fa-regular fa-copy"></i>
+        </button>
+        <button id="btnShowQR" title="แสดง QR Code" class="w-9 h-9 rounded-xl bg-white hover:bg-sky-50 border border-slate-200 text-slate-600 hover:text-sky-600 flex items-center justify-center text-xs transition">
+          <i class="fa-solid fa-qrcode"></i>
+        </button>
+        <button id="btnChangeRoom" title="เปลี่ยนห้อง" class="px-2.5 h-9 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium transition flex items-center gap-1">
+          <i class="fa-solid fa-arrows-rotate text-[10px]"></i> เปลี่ยน
+        </button>
+      </div>
+    </header>
+
+    <!-- Peers Status Banner -->
+    <div class="pastel-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-sky-50/50 via-white to-emerald-50/40">
+      <div class="flex items-center gap-3">
+        <div id="statusDot" class="w-3.5 h-3.5 rounded-full bg-amber-400 animate-pulse"></div>
+        <div>
+          <span id="statusText" class="text-xs font-semibold text-slate-700">กำลังรออุปกรณ์อื่นเข้าห้อง...</span>
+          <p class="text-[11px] text-slate-400" id="statusSubText">เปิดหน้านี้บน iPad หรือ MacBook แล้วใส่รหัสห้องเดียวกัน</p>
+        </div>
+      </div>
+      <!-- List of connected peers -->
+      <div id="peersList" class="flex items-center gap-2 flex-wrap">
+        <!-- Peer badges will be rendered here -->
+      </div>
+    </div>
+
+    <!-- Mode Selector Tabs (File Drop vs Shared Clipboard) -->
+    <div class="flex gap-2 p-1 bg-slate-200/50 rounded-2xl w-fit">
+      <button id="tabFiles" class="px-4 py-2 rounded-xl text-xs font-semibold transition bg-white text-slate-800 shadow-sm flex items-center gap-2">
+        <i class="fa-solid fa-paper-plane text-sky-500"></i> ส่งไฟล์ (Send Files)
+      </button>
+      <button id="tabClipboard" class="px-4 py-2 rounded-xl text-xs font-semibold transition text-slate-500 hover:text-slate-800 flex items-center gap-2">
+        <i class="fa-regular fa-clipboard text-indigo-500"></i> ข้อความ / ลิงก์ (Clipboard)
+      </button>
+    </div>
+
+    <!-- 1. FILE TRANSFER SECTION -->
+    <div id="sectionFiles" class="space-y-4">
+      <!-- Drag & Drop Zone -->
+      <div id="dropZone" class="pastel-card p-8 md:p-12 border-2 border-dashed border-sky-200/80 hover:border-sky-400 bg-sky-50/20 text-center cursor-pointer relative transition">
+        <input type="file" id="fileInput" multiple class="hidden">
+        
+        <div class="w-16 h-16 rounded-3xl bg-sky-100 text-sky-600 flex items-center justify-center mx-auto mb-4 shadow-sm">
+          <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+        </div>
+        
+        <h3 class="text-base font-bold text-slate-800 font-cute">
+          ลากไฟล์มาวางที่นี่ หรือ แตะเพื่อเลือกไฟล์
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">
+          รองรับรูปภาพ วิดีโอ เพลง เอกสาร ทุกขนาด ไม่จำกัดความจุ &bull; ส่งตรง P2P แบบเข้ารหัส
+        </p>
+      </div>
+
+      <!-- Active Transfer Progress Card (Hidden by default) -->
+      <div id="cardTransfer" class="hidden pastel-card p-5 space-y-3 border-sky-300 bg-sky-50/40">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-semibold text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-circle-notch fa-spin text-sky-500"></i>
+            <span id="transferFileName">กำลังส่ง...</span>
+          </span>
+          <span id="transferSpeed" class="font-mono text-slate-500 text-[11px]">0.0 MB/s</span>
+        </div>
+        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+          <div id="transferProgressBar" class="bg-gradient-to-r from-sky-400 to-emerald-400 h-full w-0 transition-all duration-100"></div>
+        </div>
+        <div class="flex justify-between text-[11px] font-mono text-slate-400">
+          <span id="transferBytes">0 MB / 0 MB</span>
+          <span id="transferPercent" class="font-bold text-sky-600">0%</span>
+        </div>
+      </div>
+
+      <!-- Received Files List -->
+      <div class="pastel-card p-5 space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h4 class="text-xs font-bold text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-download text-emerald-500"></i> ไฟล์ที่ได้รับ (Received Files)
+          </h4>
+          <span id="countFiles" class="text-[11px] text-slate-400 font-mono">0 ไฟล์</span>
+        </div>
+
+        <div id="receivedFilesList" class="space-y-2">
+          <!-- Empty State -->
+          <div id="emptyFilesState" class="py-8 text-center text-xs text-slate-400">
+            <i class="fa-regular fa-folder-open text-2xl block mb-2 opacity-50"></i>
+            ยังไม่มีไฟล์ที่ส่งเข้ามา
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CLIPBOARD / TEXT SHARE SECTION (Hidden by default) -->
+    <div id="sectionClipboard" class="hidden space-y-4">
+      <div class="pastel-card p-5 space-y-3">
+        <h4 class="text-xs font-bold text-slate-700 flex items-center gap-2">
+          <i class="fa-regular fa-paste text-indigo-500"></i> พิมพ์ข้อความหรือวางลิงก์ที่ต้องการแชร์
+        </h4>
+        <textarea id="inputSharedText" rows="3" placeholder="วางลิงก์เว็บ ข้อความ รหัส หรือโน้ตที่นี่ แล้วกดส่ง..." class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-indigo-400 resize-none font-mono"></textarea>
+        <div class="flex justify-end">
+          <button id="btnSendText" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-sky-500 hover:opacity-90 text-white text-xs font-medium shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-paper-plane text-[10px]"></i> ส่งข้อความทันที
+          </button>
+        </div>
+      </div>
+
+      <!-- Shared Text History -->
+      <div class="pastel-card p-5 space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h4 class="text-xs font-bold text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> ประวัติข้อความที่แชร์
+          </h4>
+        </div>
+        <div id="receivedTextsList" class="space-y-2">
+          <div id="emptyTextsState" class="py-6 text-center text-xs text-slate-400">
+            ยังไม่มีข้อความที่ส่งมา
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-400 py-2">
+      PastelDrop &bull; WebRTC Direct P2P &bull; No File Limits &bull; End-to-End Encrypted
+    </footer>
+
+  </div>
+
+  <!-- QR CODE MODAL -->
+  <div id="qrModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="pastel-card p-6 max-w-sm w-full text-center space-y-4 animate-in fade-in zoom-in duration-200">
+      <div class="flex justify-between items-center">
+        <h3 class="text-sm font-bold text-slate-800 font-cute">สแกนด้วย iPad หรือโทรศัพท์</h3>
+        <button id="btnCloseQR" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center text-xs">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-100 inline-block shadow-sm">
+        <div id="qrcodeCanvas" class="mx-auto flex justify-center"></div>
+      </div>
+
+      <div>
+        <p class="text-xs text-slate-500">ใช้กล้องสแกนเพื่อเปิดห้อง <strong class="text-sky-600 mono" id="qrRoomCode">------</strong> อัตโนมัติ</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 text-white text-xs px-4 py-2.5 rounded-2xl shadow-xl transform translate-y-16 opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2">
+    <i class="fa-solid fa-check text-emerald-400"></i>
+    <span id="toastMsg">สำเร็จ</span>
+  </div>
+
+  <script>
+    // Constants
+    const CHUNK_SIZE = 64 * 1024; // 64KB per WebRTC chunk
+    const STUN_SERVERS = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
+    };
+
+    // Device detection
+    function detectDevice() {
+      const ua = navigator.userAgent;
+      if (/iPad|iPhone|iPod/.test(ua)) return { type: 'ios', name: 'iPad / iPhone' };
+      if (/Macintosh/.test(ua)) return { type: 'mac', name: 'MacBook' };
+      if (/Windows/.test(ua)) return { type: 'windows', name: 'Windows PC' };
+      if (/Android/.test(ua)) return { type: 'android', name: 'Android Device' };
+      return { type: 'desktop', name: 'Web Client' };
+    }
+    const myDevice = detectDevice();
+    document.getElementById('txtMyDeviceName').textContent = `อุปกรณ์นี้: ${myDevice.name}`;
+
+    // State
+    let currentRoom = getInitialRoom();
+    let myPeerId = null;
+    let ws = null;
+    const peerConnections = new Map(); // peerId -> { pc, dc, ready }
+    const fileReceivers = new Map();   // peerId -> { metadata, chunks, receivedBytes, startTime }
+
+    // Elements
+    const txtRoomCode = document.getElementById('txtRoomCode');
+    const qrRoomCode = document.getElementById('qrRoomCode');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const statusSubText = document.getElementById('statusSubText');
+    const peersList = document.getElementById('peersList');
+
+    const tabFiles = document.getElementById('tabFiles');
+    const tabClipboard = document.getElementById('tabClipboard');
+    const sectionFiles = document.getElementById('sectionFiles');
+    const sectionClipboard = document.getElementById('sectionClipboard');
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const cardTransfer = document.getElementById('cardTransfer');
+    const transferFileName = document.getElementById('transferFileName');
+    const transferSpeed = document.getElementById('transferSpeed');
+    const transferProgressBar = document.getElementById('transferProgressBar');
+    const transferBytes = document.getElementById('transferBytes');
+    const transferPercent = document.getElementById('transferPercent');
+
+    const receivedFilesList = document.getElementById('receivedFilesList');
+    const emptyFilesState = document.getElementById('emptyFilesState');
+    const countFiles = document.getElementById('countFiles');
+    let totalReceivedFiles = 0;
+
+    const inputSharedText = document.getElementById('inputSharedText');
+    const btnSendText = document.getElementById('btnSendText');
+    const receivedTextsList = document.getElementById('receivedTextsList');
+    const emptyTextsState = document.getElementById('emptyTextsState');
+
+    const btnCopyLink = document.getElementById('btnCopyLink');
+    const btnShowQR = document.getElementById('btnShowQR');
+    const btnCloseQR = document.getElementById('btnCloseQR');
+    const qrModal = document.getElementById('qrModal');
+    const qrcodeCanvas = document.getElementById('qrcodeCanvas');
+    const btnChangeRoom = document.getElementById('btnChangeRoom');
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.classList.remove('translate-y-16', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-16', 'opacity-0');
+      }, 2500);
+    }
+
+    // Room ID Management
+    function getInitialRoom() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const r = urlParams.get('room');
+      if (r) return r.toUpperCase();
+      // Generate random 6-digit room
+      return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    function setRoom(room) {
+      currentRoom = room.toUpperCase();
+      txtRoomCode.textContent = currentRoom;
+      qrRoomCode.textContent = currentRoom;
+      window.history.replaceState({}, '', `?room=${currentRoom}`);
+      renderQR();
+      if (ws && ws.readyState === 1) {
+        joinRoom();
+      }
+    }
+
+    // Tab Switching
+    tabFiles.addEventListener('click', () => {
+      tabFiles.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+      tabFiles.classList.remove('text-slate-500');
+      tabClipboard.classList.remove('bg-white', 'text-slate-800', 'shadow-sm');
+      tabClipboard.classList.add('text-slate-500');
+      sectionFiles.classList.remove('hidden');
+      sectionClipboard.classList.add('hidden');
+    });
+
+    tabClipboard.addEventListener('click', () => {
+      tabClipboard.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+      tabClipboard.classList.remove('text-slate-500');
+      tabFiles.classList.remove('bg-white', 'text-slate-800', 'shadow-sm');
+      tabFiles.classList.add('text-slate-500');
+      sectionClipboard.classList.remove('hidden');
+      sectionFiles.classList.add('hidden');
+    });
+
+    // QR Code
+    let qrInstance = null;
+    function renderQR() {
+      qrcodeCanvas.innerHTML = '';
+      const roomUrl = `${window.location.origin}/?room=${currentRoom}`;
+      qrInstance = new QRCode(qrcodeCanvas, {
+        text: roomUrl,
+        width: 180,
+        height: 180,
+        colorDark: "#1e293b",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+
+    btnShowQR.addEventListener('click', () => {
+      renderQR();
+      qrModal.classList.remove('hidden');
+    });
+    btnCloseQR.addEventListener('click', () => qrModal.classList.add('hidden'));
+    qrModal.addEventListener('click', (e) => {
+      if (e.target === qrModal) qrModal.classList.add('hidden');
+    });
+
+    btnCopyLink.addEventListener('click', () => {
+      const roomUrl = `${window.location.origin}/?room=${currentRoom}`;
+      navigator.clipboard.writeText(roomUrl).then(() => {
+        showToast('คัดลอกลิงก์ห้องแล้ว!');
+      });
+    });
+
+    btnChangeRoom.addEventListener('click', () => {
+      const input = prompt('ใส่รหัสห้อง 6 หลักที่ต้องการเข้า (หรือเว้นว่างเพื่อสุ่ม):', currentRoom);
+      if (input !== null) {
+        const nextRoom = input.trim() || Math.floor(100000 + Math.random() * 900000).toString();
+        // Close old peers
+        peerConnections.forEach(p => p.pc.close());
+        peerConnections.clear();
+        setRoom(nextRoom);
+      }
+    });
+
+    // WebSocket Signaling
+    function connectSignaling() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        joinRoom();
+      };
+
+      ws.onmessage = async (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'joined') {
+          myPeerId = msg.peerId;
+          updatePeersUI(msg.peers);
+          // Connect to each existing peer (we are initiator)
+          msg.peers.forEach(peer => createPeerConnection(peer.peerId, true));
+        } else if (msg.type === 'peer-joined') {
+          addPeerUI(msg.peer);
+          // New peer joined, wait for their offer
+        } else if (msg.type === 'peer-left') {
+          removePeerUI(msg.peerId);
+          if (peerConnections.has(msg.peerId)) {
+            peerConnections.get(msg.peerId).pc.close();
+            peerConnections.delete(msg.peerId);
+          }
+        } else if (msg.type === 'signal-offer') {
+          await handleSignalOffer(msg.senderPeerId, msg.payload);
+        } else if (msg.type === 'signal-answer') {
+          await handleSignalAnswer(msg.senderPeerId, msg.payload);
+        } else if (msg.type === 'signal-candidate') {
+          await handleSignalCandidate(msg.senderPeerId, msg.payload);
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(connectSignaling, 2000);
+      };
+    }
+
+    function joinRoom() {
+      ws.send(JSON.stringify({
+        type: 'join',
+        roomId: currentRoom,
+        deviceName: myDevice.name,
+        deviceType: myDevice.type
+      }));
+    }
+
+    // WebRTC Peer Connection
+    function createPeerConnection(targetPeerId, isInitiator) {
+      if (peerConnections.has(targetPeerId)) return;
+
+      const pc = new RTCPeerConnection(STUN_SERVERS);
+      let dc = null;
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          ws.send(JSON.stringify({
+            type: 'signal-candidate',
+            targetPeerId,
+            payload: event.candidate
+          }));
+        }
+      };
+
+      if (isInitiator) {
+        dc = pc.createDataChannel('pasteldrop', { ordered: true });
+        setupDataChannel(dc, targetPeerId);
+        peerConnections.set(targetPeerId, { pc, dc, ready: false });
+
+        pc.createOffer().then(offer => {
+          return pc.setLocalDescription(offer);
+        }).then(() => {
+          ws.send(JSON.stringify({
+            type: 'signal-offer',
+            targetPeerId,
+            payload: pc.localDescription
+          }));
+        }).catch(console.error);
+      } else {
+        pc.ondatachannel = (event) => {
+          dc = event.channel;
+          setupDataChannel(dc, targetPeerId);
+          const p = peerConnections.get(targetPeerId);
+          if (p) p.dc = dc;
+        };
+        peerConnections.set(targetPeerId, { pc, dc: null, ready: false });
+      }
+    }
+
+    async function handleSignalOffer(senderPeerId, offer) {
+      createPeerConnection(senderPeerId, false);
+      const peer = peerConnections.get(senderPeerId);
+      await peer.pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peer.pc.createAnswer();
+      await peer.pc.setLocalDescription(answer);
+
+      ws.send(JSON.stringify({
+        type: 'signal-answer',
+        targetPeerId: senderPeerId,
+        payload: peer.pc.localDescription
+      }));
+    }
+
+    async function handleSignalAnswer(senderPeerId, answer) {
+      const peer = peerConnections.get(senderPeerId);
+      if (peer) {
+        await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    }
+
+    async function handleSignalCandidate(senderPeerId, candidate) {
+      const peer = peerConnections.get(senderPeerId);
+      if (peer && peer.pc) {
+        await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    }
+
+    function setupDataChannel(dc, peerId) {
+      dc.binaryType = 'arraybuffer';
+
+      dc.onopen = () => {
+        const p = peerConnections.get(peerId);
+        if (p) p.ready = true;
+        updateConnectionStatus();
+        showToast('เชื่อมต่ออุปกรณ์สำเร็จแล้ว! 🎉');
+      };
+
+      dc.onclose = () => {
+        const p = peerConnections.get(peerId);
+        if (p) p.ready = false;
+        updateConnectionStatus();
+      };
+
+      dc.onmessage = (event) => {
+        handleDataChannelMessage(peerId, event.data);
+      };
+    }
+
+    // Data Channel Protocol
+    function handleDataChannelMessage(peerId, data) {
+      if (typeof data === 'string') {
+        const msg = JSON.parse(data);
+
+        if (msg.type === 'file-start') {
+          // File incoming
+          fileReceivers.set(peerId, {
+            name: msg.name,
+            size: msg.size,
+            mime: msg.mime,
+            chunks: [],
+            receivedBytes: 0,
+            startTime: Date.now()
+          });
+          cardTransfer.classList.remove('hidden');
+          transferFileName.textContent = `กำลังรับ: ${msg.name}`;
+          updateTransferUI(0, msg.size, 0);
+        } else if (msg.type === 'file-end') {
+          // Finalize file
+          const receiver = fileReceivers.get(peerId);
+          if (receiver) {
+            const blob = new Blob(receiver.chunks, { type: receiver.mime || 'application/octet-stream' });
+            saveReceivedFile(receiver.name, blob, receiver.size);
+            fileReceivers.delete(peerId);
+            setTimeout(() => cardTransfer.classList.add('hidden'), 1000);
+            showToast(`ได้รับไฟล์ ${receiver.name} เรียบร้อย!`);
+          }
+        } else if (msg.type === 'shared-text') {
+          addReceivedText(msg.text, msg.deviceName || 'อุปกรณ์ในห้อง');
+          showToast('ได้รับข้อความใหม่!');
+        }
+      } else {
+        // Binary chunk
+        const receiver = fileReceivers.get(peerId);
+        if (receiver) {
+          receiver.chunks.push(data);
+          receiver.receivedBytes += data.byteLength;
+
+          const elapsedSec = (Date.now() - receiver.startTime) / 1000;
+          const speedMB = elapsedSec > 0 ? (receiver.receivedBytes / 1024 / 1024) / elapsedSec : 0;
+          updateTransferUI(receiver.receivedBytes, receiver.size, speedMB);
+        }
+      }
+    }
+
+    function updateTransferUI(transferred, total, speedMB) {
+      const pct = total > 0 ? Math.min(100, Math.round((transferred / total) * 100)) : 0;
+      transferProgressBar.style.width = `${pct}%`;
+      transferPercent.textContent = `${pct}%`;
+      transferSpeed.textContent = `${speedMB.toFixed(1)} MB/s`;
+
+      const curMB = (transferred / 1024 / 1024).toFixed(1);
+      const totalMB = (total / 1024 / 1024).toFixed(1);
+      transferBytes.textContent = `${curMB} MB / ${totalMB} MB`;
+    }
+
+    // Sending Files
+    async function sendFile(file) {
+      const activePeers = Array.from(peerConnections.values()).filter(p => p.ready && p.dc && p.dc.readyState === 'open');
+      if (activePeers.length === 0) {
+        alert('ยังไม่มีอุปกรณ์อื่นเชื่อมต่อในห้องนี้! กรุณาเปิด iPad หรือ Mac เข้าห้องเดียวกันก่อนครับ');
+        return;
+      }
+
+      cardTransfer.classList.remove('hidden');
+      transferFileName.textContent = `กำลังส่ง: ${file.name}`;
+      updateTransferUI(0, file.size, 0);
+
+      // 1. Send Header
+      const header = JSON.stringify({
+        type: 'file-start',
+        name: file.name,
+        size: file.size,
+        mime: file.type
+      });
+      activePeers.forEach(p => p.dc.send(header));
+
+      // 2. Send Chunks
+      let offset = 0;
+      const startTime = Date.now();
+
+      while (offset < file.size) {
+        const slice = file.slice(offset, offset + CHUNK_SIZE);
+        const buffer = await slice.arrayBuffer();
+
+        // Check buffer full
+        for (const peer of activePeers) {
+          if (peer.dc.bufferedAmount > 16 * 1024 * 1024) {
+            await new Promise(r => setTimeout(r, 50));
+          }
+          peer.dc.send(buffer);
+        }
+
+        offset += buffer.byteLength;
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speedMB = elapsed > 0 ? (offset / 1024 / 1024) / elapsed : 0;
+        updateTransferUI(offset, file.size, speedMB);
+      }
+
+      // 3. Send End
+      activePeers.forEach(p => p.dc.send(JSON.stringify({ type: 'file-end' })));
+      setTimeout(() => cardTransfer.classList.add('hidden'), 1200);
+      showToast(`ส่งไฟล์ ${file.name} สำเร็จ!`);
+    }
+
+    // UI Peer Status
+    function updateConnectionStatus() {
+      const readyCount = Array.from(peerConnections.values()).filter(p => p.ready).length;
+      if (readyCount > 0) {
+        statusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-400';
+        statusText.textContent = `เชื่อมต่อแล้ว (${readyCount} อุปกรณ์) พร้อมส่ง`;
+        statusSubText.textContent = 'สามารถลากไฟล์ หรือพิมพ์ข้อความส่งข้ามเครื่องได้ทันที';
+      } else {
+        statusDot.className = 'w-3.5 h-3.5 rounded-full bg-amber-400 animate-pulse';
+        statusText.textContent = 'กำลังรออุปกรณ์อื่นเข้าห้อง...';
+        statusSubText.textContent = 'เปิดหน้านี้บน iPad หรือ MacBook แล้วใส่รหัสห้องเดียวกัน';
+      }
+    }
+
+    const peerInfoMap = new Map();
+    function updatePeersUI(peers) {
+      peersList.innerHTML = '';
+      peers.forEach(addPeerUI);
+      updateConnectionStatus();
+    }
+
+    function addPeerUI(peer) {
+      peerInfoMap.set(peer.peerId, peer);
+      renderPeerBadges();
+    }
+
+    function removePeerUI(peerId) {
+      peerInfoMap.delete(peerId);
+      renderPeerBadges();
+      updateConnectionStatus();
+    }
+
+    function renderPeerBadges() {
+      peersList.innerHTML = '';
+      peerInfoMap.forEach(peer => {
+        const badge = document.createElement('div');
+        badge.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 shadow-sm';
+        
+        let icon = 'fa-desktop';
+        if (peer.deviceType === 'ios') icon = 'fa-tablet-screen-button';
+        if (peer.deviceType === 'mac') icon = 'fa-laptop';
+
+        badge.innerHTML = `<i class="fa-solid ${icon} text-sky-500 text-[11px]"></i> <span>${peer.deviceName}</span>`;
+        peersList.appendChild(badge);
+      });
+    }
+
+    // Received File Handling
+    function saveReceivedFile(name, blob, size) {
+      emptyFilesState.classList.add('hidden');
+      totalReceivedFiles++;
+      countFiles.textContent = `${totalReceivedFiles} ไฟล์`;
+
+      const url = URL.createObjectURL(blob);
+      const row = document.createElement('div');
+      row.className = 'p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3';
+
+      const isImage = blob.type.startsWith('image/');
+      const sizeMB = (size / 1024 / 1024).toFixed(2);
+
+      row.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          ${isImage 
+            ? `<img src="${url}" class="w-11 h-11 rounded-xl object-cover border border-slate-200">`
+            : `<div class="w-11 h-11 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center text-lg"><i class="fa-regular fa-file"></i></div>`
+          }
+          <div class="truncate">
+            <span class="text-xs font-semibold text-slate-800 block truncate">${name}</span>
+            <span class="text-[11px] font-mono text-slate-400">${sizeMB} MB</span>
+          </div>
+        </div>
+        <a href="${url}" download="${name}" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0 shadow-sm">
+          <i class="fa-solid fa-download text-[11px]"></i> ดาวน์โหลด
+        </a>
+      `;
+
+      receivedFilesList.prepend(row);
+    }
+
+    // Shared Text Handling
+    btnSendText.addEventListener('click', () => {
+      const text = inputSharedText.value.trim();
+      if (!text) return;
+
+      const activePeers = Array.from(peerConnections.values()).filter(p => p.ready && p.dc && p.dc.readyState === 'open');
+      if (activePeers.length === 0) {
+        alert('ยังไม่มีอุปกรณ์อื่นเชื่อมต่อในห้องนี้!');
+        return;
+      }
+
+      const payload = JSON.stringify({
+        type: 'shared-text',
+        text,
+        deviceName: myDevice.name
+      });
+      activePeers.forEach(p => p.dc.send(payload));
+
+      addReceivedText(text, 'ฉันเอง');
+      inputSharedText.value = '';
+      showToast('ส่งข้อความแล้ว!');
+    });
+
+    function addReceivedText(text, sender) {
+      emptyTextsState.classList.add('hidden');
+      const card = document.createElement('div');
+      card.className = 'p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2';
+
+      const isUrl = /^https?:\/\//i.test(text);
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between text-[11px] text-slate-400">
+          <span>ส่งโดย: <strong class="text-slate-600">${sender}</strong></span>
+          <button class="btnCopyText text-indigo-500 hover:text-indigo-600 font-medium flex items-center gap-1">
+            <i class="fa-regular fa-copy"></i> คัดลอก
+          </button>
+        </div>
+        <div class="text-xs text-slate-800 font-mono break-all whitespace-pre-wrap ${isUrl ? 'text-sky-600 underline' : ''}">${text}</div>
+      `;
+
+      card.querySelector('.btnCopyText').addEventListener('click', () => {
+        navigator.clipboard.writeText(text).then(() => showToast('คัดลอกข้อความแล้ว!'));
+      });
+
+      receivedTextsList.prepend(card);
+    }
+
+    // Drag and Drop
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        Array.from(fileInput.files).forEach(sendFile);
+      }
+    });
+
+    ['dragenter', 'dragover'].forEach(event => {
+      dropZone.addEventListener(event, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drop-active');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(event => {
+      dropZone.addEventListener(event, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drop-active');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files.length > 0) {
+        Array.from(e.dataTransfer.files).forEach(sendFile);
+      }
+    });
+
+    // Init
+    setRoom(currentRoom);
+    connectSignaling();
+  </script>
+</body>
+</html>

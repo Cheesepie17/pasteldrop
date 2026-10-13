@@ -1,0 +1,22 @@
+{
+  "name": "PastelDrop - P2P AirDrop",
+  "short_name": "PastelDrop",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#e0f2fe",
+  "description": "Minimalist P2P AirDrop for PC, Mac and iPad",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

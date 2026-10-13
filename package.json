@@ -1,0 +1,13 @@
+{
+  "name": "pasteldrop",
+  "version": "1.0.0",
+  "description": "Minimalist P2P WebRTC File & Clipboard Transfer for PC, Mac, iPad",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
