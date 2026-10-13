@@ -158,6 +158,17 @@ wss.on('connection', (ws) => {
   });
 });
 
+// WebSocket Keep-Alive Heartbeat (every 20s to prevent Render/iOS timeout)
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === 1) {
+      try {
+        ws.ping();
+      } catch (e) {}
+    }
+  });
+}, 20000);
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`PastelDrop running at http://localhost:${PORT}`);
   console.log(`On local network: http://${getLocalIP()}:${PORT}`);

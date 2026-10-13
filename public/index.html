@@ -159,7 +159,12 @@
           <h4 class="text-xs font-bold text-slate-700 flex items-center gap-2">
             <i class="fa-solid fa-download text-emerald-500"></i> ไฟล์ที่ได้รับ (Received Files)
           </h4>
-          <span id="countFiles" class="text-[11px] text-slate-400 font-mono">0 ไฟล์</span>
+          <div class="flex items-center gap-2.5">
+            <span id="countFiles" class="text-[11px] text-slate-400 font-mono">0 ไฟล์</span>
+            <button id="btnClearFiles" class="text-[11px] text-rose-400 hover:text-rose-600 font-medium transition flex items-center gap-1">
+              <i class="fa-regular fa-trash-can text-[10px]"></i> ล้างประวัติ
+            </button>
+          </div>
         </div>
 
         <div id="receivedFilesList" class="space-y-2">
@@ -317,13 +322,19 @@
     function getInitialRoom() {
       const urlParams = new URLSearchParams(window.location.search);
       const r = urlParams.get('room');
-      if (r) return r.toUpperCase();
-      // Generate random 6-digit room
-      return Math.floor(100000 + Math.random() * 900000).toString();
+      if (r) {
+        const clean = r.toUpperCase();
+        localStorage.setItem('pasteldrop_room', clean);
+        return clean;
+      }
+      const saved = localStorage.getItem('pasteldrop_room');
+      if (saved) return saved;
+      return 'CHEESE'; // Default room is CHEESE!
     }
 
     function setRoom(room) {
       currentRoom = room.toUpperCase();
+      localStorage.setItem('pasteldrop_room', currentRoom);
       txtRoomCode.textContent = currentRoom;
       qrRoomCode.textContent = currentRoom;
       window.history.replaceState({}, '', `?room=${currentRoom}`);
@@ -687,9 +698,81 @@
       });
     }
 
-    // Received File Handling
-    function saveReceivedFile(name, blob, size) {
-      emptyFilesState.classList.add('hidden');
+    // IndexedDB Persistent Storage
+    let db = null;
+    const DB_NAME = 'PastelDrop_DB';
+    const STORE_NAME = 'saved_files';
+
+    function initDB() {
+      return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains(STORE_NAME)) {
+            d.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+          }
+        };
+        req.onsuccess = (e) => {
+          db = e.target.result;
+          loadPersistedFiles();
+          resolve(db);
+        };
+        req.onerror = () => resolve(null);
+      });
+    }
+
+    function persistFile(name, blob, size) {
+      if (!db) return;
+      try {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.add({
+          name,
+          blob,
+          size,
+          type: blob.type || 'application/octet-stream',
+          timestamp: Date.now()
+        });
+      } catch (e) {
+        console.error('IndexedDB save error:', e);
+      }
+    }
+
+    function loadPersistedFiles() {
+      if (!db) return;
+      const tx = db.transaction([STORE_NAME], 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const files = req.result || [];
+        files.sort((a, b) => a.timestamp - b.timestamp);
+        files.forEach(f => displayFileCard(f.name, f.blob, f.size));
+      };
+    }
+
+    const btnClearFiles = document.getElementById('btnClearFiles');
+    if (btnClearFiles) {
+      btnClearFiles.addEventListener('click', () => {
+        if (!confirm('ต้องการล้างประวัติไฟล์ทั้งหมดใช่หรือไม่?')) return;
+        if (db) {
+          const tx = db.transaction([STORE_NAME], 'readwrite');
+          tx.objectStore(STORE_NAME).clear();
+        }
+        receivedFilesList.innerHTML = `
+          <div id="emptyFilesState" class="py-8 text-center text-xs text-slate-400">
+            <i class="fa-regular fa-folder-open text-2xl block mb-2 opacity-50"></i>
+            ยังไม่มีไฟล์ที่ส่งเข้ามา
+          </div>
+        `;
+        totalReceivedFiles = 0;
+        countFiles.textContent = '0 ไฟล์';
+        showToast('ล้างประวัติไฟล์เรียบร้อย');
+      });
+    }
+
+    function displayFileCard(name, blob, size) {
+      const emptyState = document.getElementById('emptyFilesState');
+      if (emptyState) emptyState.classList.add('hidden');
       totalReceivedFiles++;
       countFiles.textContent = `${totalReceivedFiles} ไฟล์`;
 
@@ -697,7 +780,7 @@
       const row = document.createElement('div');
       row.className = 'p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3';
 
-      const isImage = blob.type.startsWith('image/');
+      const isImage = blob.type && blob.type.startsWith('image/');
       const sizeMB = (size / 1024 / 1024).toFixed(2);
 
       row.innerHTML = `
@@ -717,6 +800,12 @@
       `;
 
       receivedFilesList.prepend(row);
+    }
+
+    // Received File Handling
+    function saveReceivedFile(name, blob, size) {
+      persistFile(name, blob, size);
+      displayFileCard(name, blob, size);
     }
 
     // Shared Text Handling
@@ -794,7 +883,28 @@
       }
     });
 
+    // Auto-reconnect on tab switch or unlock on iPad
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (!ws || ws.readyState !== 1) {
+          connectSignaling();
+        } else {
+          joinRoom();
+        }
+      }
+    });
+
+    // Client keep-alive ping (keeps Render connection alive)
+    setInterval(() => {
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      } else if (!ws || ws.readyState === 3) {
+        connectSignaling();
+      }
+    }, 15000);
+
     // Init
+    initDB();
     setRoom(currentRoom);
     connectSignaling();
   </script>
